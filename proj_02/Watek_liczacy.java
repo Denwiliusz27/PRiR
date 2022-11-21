@@ -4,23 +4,23 @@ import java.util.List;
 public class Watek_liczacy extends Thread {
     private int id;
     private ParallelCalculator parallelCalculator;
-    private DeltaReceiver deltaReceiver;
-//    private Semaphore ochronaDeltaReceiver;
+    private Ukladanie_delt ukladanie_delt;
 
-    public Watek_liczacy(int id, ParallelCalculator parallelCalculator, DeltaReceiver deltaReceiver){ // 4 parametr Semaphore ochrona receivera
+    public Watek_liczacy(int id, ParallelCalculator parallelCalculator,  Ukladanie_delt ukladanie_delt){ // 4 parametr Semaphore ochrona receivera
         this.id = id;
-        System.out.println("Watek " + id + "utworzony");
+//        System.out.println("Watek " + id + "utworzony");
         this.parallelCalculator = parallelCalculator;
-        this.deltaReceiver = deltaReceiver;
+        this.ukladanie_delt = ukladanie_delt;
     }
 
     public void run(){
-        System.out.println("Watek " + id + " wystartował");
+//        System.out.println("Watek " + id + " wystartował");
 
         while(true){
             try {
                 Task mojTask = parallelCalculator.dajKolejnyTask( id );
-                System.out.println("Watek "+ id + " otrzymalem task " + mojTask + " i zaczynam go wykonywać");
+//                System.out.println("Watek "+ id + " otrzymalem task " + mojTask + " i zaczynam go wykonywać");
+                System.out.println(id + " sprawdzam pare: " + mojTask.daj_pierwszy_wektor().getDataId() + " i " + mojTask.daj_drugi_wektor().getDataId());
                 wykonaj_task(mojTask);
             } catch (InterruptedException ex) {
                 System.out.println("Watek " + id +" nie dostal taska bo wystapilo przerwanie programu " + ex );
@@ -29,7 +29,8 @@ public class Watek_liczacy extends Thread {
     }
 
     private void wykonaj_task(Task mojTask){
-        System.out.println("watek "+ id + "wykonuje task " + mojTask + " i oblicza delte lub delty" );
+//        System.out.println("watek "+ id + "wykonuje task " + mojTask + " i oblicza delte lub delty" );
+        List<Delta> deltas = new ArrayList<Delta>();
 
         int id_delty = mojTask.daj_mniejsze_id();
         int sprawdzany_index = mojTask.daj_poczatkowy_index();
@@ -41,11 +42,18 @@ public class Watek_liczacy extends Thread {
         Delta delta = new Delta(id_delty, sprawdzany_index, roznica);
         System.out.println("watek " + id + " ma delte:" + delta);
 
-        List<Delta> deltas = new ArrayList<Delta>();
         deltas.add(delta);
 
-        // aquire
-        deltaReceiver.accept(deltas);
-        // release
+
+        ukladanie_delt.oddaj_delta(deltas);
+//        // aquire
+//        try {
+//            ochronaDeltaReceiver.acquire();
+//            deltaReceiver.accept(deltas);
+//            ochronaDeltaReceiver.release();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+//        // release
     }
 }

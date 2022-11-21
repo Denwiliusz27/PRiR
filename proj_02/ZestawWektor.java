@@ -48,7 +48,7 @@ public class ZestawWektor implements Data {
     public String toString() {
         return "ZestawWektor{" +
                 "id=" + id +
-                ", tablica=" + Arrays.toString(tablica) +
+                ", " + Arrays.toString(tablica) +
                 '}';
     }
 }

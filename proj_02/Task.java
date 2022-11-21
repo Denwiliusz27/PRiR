@@ -12,7 +12,7 @@ public class Task {
         this.zestawWektor2 = zestaw2;
         this.poczatek_przedzialu = poczatek;
         this.koniec_przedzialu = koniec;
-        System.out.println("Utworzony task: " + toString());
+//        System.out.println("Utworzony task: " + toString());
     }
 
     public int daj_mniejsze_id(){
@@ -52,10 +52,10 @@ public class Task {
     @Override
     public String toString() {
         return "Task{" +
-                "zestawWektor1=" + zestawWektor1 +
-                ", zestawWektor2=" + zestawWektor2 +
-                ", poczatek_przedzialu=" + poczatek_przedzialu +
-                ", koniec_przedzialu=" + koniec_przedzialu +
-                '}';
+                zestawWektor1 +
+                ", " + zestawWektor2 +
+                ", [" + poczatek_przedzialu +
+                ", " + koniec_przedzialu +
+                "]}";
     }
 }
