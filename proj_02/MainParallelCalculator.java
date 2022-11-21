@@ -17,7 +17,7 @@ public class MainParallelCalculator {
         int[] t9 = {0, 0, 1, 1, 0, 0};
 
 
-        ZestawWektor zestaw_wektor = new ZestawWektor(2, t2);
+        DataSet zestaw_wektor = new DataSet(2, t2);
         parallelCalculator.addData(zestaw_wektor);
 
 
@@ -27,7 +27,7 @@ public class MainParallelCalculator {
 //            e.printStackTrace();
 //        }
 
-        zestaw_wektor = new ZestawWektor(5, t5);
+        zestaw_wektor = new DataSet(5, t5);
         parallelCalculator.addData(zestaw_wektor);
 
 //        try {
@@ -36,7 +36,7 @@ public class MainParallelCalculator {
 //            e.printStackTrace();
 //        }
 
-        zestaw_wektor = new ZestawWektor(3, t3);
+        zestaw_wektor = new DataSet(3, t3);
         parallelCalculator.addData(zestaw_wektor);
 
 
@@ -46,7 +46,7 @@ public class MainParallelCalculator {
 //            e.printStackTrace();
 //        }
 
-        zestaw_wektor = new ZestawWektor(6, t6);
+        zestaw_wektor = new DataSet(6, t6);
         parallelCalculator.addData(zestaw_wektor);
 
 //        try {
@@ -55,7 +55,7 @@ public class MainParallelCalculator {
 //            e.printStackTrace();
 //        }
 
-        zestaw_wektor = new ZestawWektor(4, t4);
+        zestaw_wektor = new DataSet(4, t4);
         parallelCalculator.addData(zestaw_wektor);
 
 //        try {
@@ -64,7 +64,7 @@ public class MainParallelCalculator {
 //                e.printStackTrace();
 //            }
 
-        zestaw_wektor = new ZestawWektor(1, t1);
+        zestaw_wektor = new DataSet(1, t1);
         parallelCalculator.addData(zestaw_wektor);
 
 
@@ -74,7 +74,7 @@ public class MainParallelCalculator {
 //            e.printStackTrace();
 //        }
 
-        zestaw_wektor = new ZestawWektor(7, t7);
+        zestaw_wektor = new DataSet(7, t7);
         parallelCalculator.addData(zestaw_wektor);
 
 //        try {
@@ -88,7 +88,7 @@ public class MainParallelCalculator {
 
 
         for(int i=100; i>=8; i--){
-            zestaw_wektor = new ZestawWektor(i, tablica);
+            zestaw_wektor = new DataSet(i, tablica);
             parallelCalculator.addData(zestaw_wektor);
             zmien_tablice(tablica);
 //            try {

@@ -1,26 +1,27 @@
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
 
 public class ParallelCalculator implements DeltaParallelCalculator {
-    private List<Data> vectors_set; // lista wektorów
-    private HashMap<Data, Integer> calculations_amount; // mapa ile który wektor był obliczany
-    private Watek_liczacy[] counting_threads; //
-    private List<Task> lista_taskow;
-    private Semaphore czekaj_na_niepuste_taski;
-    private Semaphore ochrona_listy_taskow;
+    private List<Data> vectors; // lista wektorów
+    private HashMap<Data, Integer> calculationsAmount; // mapa ile który wektor był obliczany
+    private CountingThread[] countingThreads;
+    private List<Task> tasks;
+    private Semaphore waitForTasks;
+    private Semaphore tasksSemaphore;
     private DeltaReceiver deltaReceiver;
-    private Ukladanie_delt ukladanieDelty;
+    private DeltaCollecting collectingDelta;
 
 
     public ParallelCalculator(){
-        vectors_set = new ArrayList<Data>();
-        lista_taskow = new ArrayList<Task>();
-        czekaj_na_niepuste_taski = new Semaphore(0);
-        ochrona_listy_taskow = new Semaphore(1);
-        calculations_amount = new HashMap<Data, Integer>();
+        vectors = new ArrayList<Data>();
+        tasks = new ArrayList<Task>();
+        waitForTasks = new Semaphore(0);
+        tasksSemaphore = new Semaphore(1);
+        calculationsAmount = new HashMap<Data, Integer>();
     }
 
     /**
@@ -30,18 +31,18 @@ public class ParallelCalculator implements DeltaParallelCalculator {
      * @param threads liczba wątków.
      */
     public void setThreadsNumber(int threads){
-       setDeltaReceiver(new OdbiorWynikow());
-       counting_threads = new Watek_liczacy[threads];
+       setDeltaReceiver(new ReceiveOfResults());
+       countingThreads = new CountingThread[threads];
 
        for(int i=0; i<threads; i++){
-           counting_threads[i] = new Watek_liczacy( i, this, ukladanieDelty );
+           countingThreads[i] = new CountingThread( i, this, collectingDelta);
        }
-       startuj_watki();
+       startThreads();
     }
 
-    public void startuj_watki(){
-        for(int i = 0; i < counting_threads.length; i++){
-            counting_threads[i].start();
+    public void startThreads(){
+        for(int i = 0; i < countingThreads.length; i++){
+            countingThreads[i].start();
         }
     }
 
@@ -53,7 +54,7 @@ public class ParallelCalculator implements DeltaParallelCalculator {
      */
     public void setDeltaReceiver(DeltaReceiver receiver){
         this.deltaReceiver = receiver;
-        ukladanieDelty = new Ukladanie_delt(this.deltaReceiver);
+        collectingDelta = new DeltaCollecting(this.deltaReceiver);
     }
 
     /**
@@ -62,106 +63,341 @@ public class ParallelCalculator implements DeltaParallelCalculator {
      * @param data obiekt z danymi do przetworzenia
      */
     public void addData(Data data) {
-        calculations_amount.put(data, 0);
-        add_and_sort_vectors(data);
+        calculationsAmount.put(data, 0);
+        addAndSortVectors(data);
+        collectingDelta.setVectorSize(data.getSize());
 
-        ukladanieDelty.set_rozmiar_wektora(data.getSize());
+//        System.out.println("lista wektorów w kalkulatorze: " + vectors);
 
-        System.out.println("lista wektorów w kalkulatorze: " + vectors_set);
+        List<Data> vectorsToDelete = new ArrayList<Data>();
 
-        List<Data> usuwane = new ArrayList<Data>();
-
-        for(int i = 0; i< vectors_set.size(); i++){
-            Data zListy = vectors_set.get(i);
-
+        for(int i = 0; i< vectors.size(); i++){
+            Data vectorFromList = vectors.get(i);
 
             try {
-                if (( zListy.getDataId() == data.getDataId() + 1) || (zListy.getDataId() == data.getDataId() - 1)){
-                    for(int j=0; j<zListy.getSize(); j++){
-                        Task nowytask = new Task(zListy, data, j, j);
+                if (( vectorFromList.getDataId() == data.getDataId() + 1) || (vectorFromList.getDataId() == data.getDataId() - 1)){
+                    for(int j=0; j<vectorFromList.getSize(); j++){
+                        Task newTask = new Task(vectorFromList, data, j, j);
 
-                        ochrona_listy_taskow.acquire(); // rozpoczynam ochrone listy taskow
-
-//                        lista_taskow.add(nowytask);
-                        sort_tasks(nowytask);
-
-                        System.out.println("Ilosc tasków: " + lista_taskow.size() + " lista: "+ lista_taskow);
-                        ochrona_listy_taskow.release(); // koncze ochrone listy taskow
-                        czekaj_na_niepuste_taski.release(); // dodaj do semafora 1
+                        tasksSemaphore.acquire(); // rozpoczynam ochrone listy taskow
+                        sortTasks(newTask);
+//                        System.out.println("Ilosc tasków: " + tasks.size() + " lista: "+ tasks);
+                        tasksSemaphore.release(); // koncze ochrone listy taskow
+                        waitForTasks.release(); // dodaj do semafora 1
                     }
 
-                    int licznik_zlisty = calculations_amount.get(zListy);
-                    int licznik_data = calculations_amount.get(data);
-                    licznik_zlisty ++;
-                    licznik_data ++;
+                    int vectorFromListCounter = calculationsAmount.get(vectorFromList);
+                    int dataCounter = calculationsAmount.get(data);
+                    vectorFromListCounter ++;
+                    dataCounter ++;
 
-                    if (licznik_zlisty == 2){
-                        usuwane.add(zListy);
-                        calculations_amount.remove(zListy);
+                    if (vectorFromListCounter == 2){
+                        vectorsToDelete.add(vectorFromList);
+                        calculationsAmount.remove(vectorFromList);
                     } else {
-                        calculations_amount.put(zListy, licznik_zlisty);
+                        calculationsAmount.put(vectorFromList, vectorFromListCounter);
                     }
 
-                    if (licznik_data == 2){
-                        usuwane.add(data);
-                        calculations_amount.remove(data);
+                    if (dataCounter == 2){
+                        vectorsToDelete.add(data);
+                        calculationsAmount.remove(data);
                     } else {
-                        calculations_amount.put(data, licznik_data);
+                        calculationsAmount.put(data, dataCounter);
                     }
                 }
             } catch (InterruptedException ex){
                 ex.printStackTrace();
             }
         }
-
-        vectors_set.removeAll(usuwane);
-
-        System.out.println("LISTA WEKTOROW: " + vectors_set);
+        vectors.removeAll(vectorsToDelete);
+//        System.out.println("LISTA WEKTOROW: " + vectors);
     }
 
-    public void add_and_sort_vectors(Data data){
-        if (vectors_set.size() == 0){
-            vectors_set.add(data);
+    public void addAndSortVectors(Data data){
+        if (vectors.size() == 0){
+            vectors.add(data);
         } else {
-            for (int i = 0; i< vectors_set.size(); i++){
-                if (data.getDataId() < vectors_set.get(i).getDataId()){
-                    vectors_set.add(i, data);
+            for (int i = 0; i< vectors.size(); i++){
+                if (data.getDataId() < vectors.get(i).getDataId()){
+                    vectors.add(i, data);
                     break;
                 }
             }
-            if (!vectors_set.contains(data)){
-                vectors_set.add(data);
+            if (!vectors.contains(data)){
+                vectors.add(data);
             }
         }
     }
 
-    public void sort_tasks(Task task) {
-        if (lista_taskow.size() == 0){
-            lista_taskow.add(task);
+    public void sortTasks(Task task) {
+        if (tasks.size() == 0){
+            tasks.add(task);
         } else {
-            for (int i=0; i<lista_taskow.size(); i++){
-                if (task.daj_mniejsze_id() < lista_taskow.get(i).daj_mniejsze_id()){
-                    lista_taskow.add(i, task);
+            for (int i = 0; i< tasks.size(); i++){
+                if (task.getSmallerId() < tasks.get(i).getSmallerId()){
+                    tasks.add(i, task);
                     return;
                 }
             }
-            if (!lista_taskow.contains(task)){
-                lista_taskow.add(task);
+            if (!tasks.contains(task)){
+                tasks.add(task);
             }
         }
     }
 
-    public Task dajKolejnyTask(int id) throws InterruptedException {
+    public Task getNextTask(int id) throws InterruptedException {
+//        System.out.println("Watek " + id+ " stoi przed semaforem");
+        waitForTasks.acquire(); // stoi w miejscu dla 0 lub wykonuje -1 jesli jest dodatni
+        tasksSemaphore.acquire();
+        Task taskFromList = tasks.remove(0);
+        tasksSemaphore.release();
 
-        System.out.println("Watek " + id+ " stoi przed semaforem");
-        czekaj_na_niepuste_taski.acquire(); // stoi w miejscu dla 0 lub wykonuje -1 jesli jest dodatni
-//        System.out.println("Watek " + id+ " nie czeka juz na semaforze");
+        return taskFromList;
+    }
+}
 
-        ochrona_listy_taskow.acquire();
-        Task zabrany_task = lista_taskow.remove(0);
-//        System.out.println("Watek " + id+ " wziął task:" + zabrany_task + " size: "+ lista_taskow.size() + "lista: " + lista_taskow);
-        ochrona_listy_taskow.release();
 
-        return zabrany_task;
+class CountingThread extends Thread {
+    private int id;
+    private ParallelCalculator parallelCalculator;
+    private DeltaCollecting deltsCalculation;
+
+    public CountingThread(int id, ParallelCalculator parallelCalculator, DeltaCollecting deltsCalculation){ // 4 parametr Semaphore ochrona receivera
+        this.id = id;
+        this.parallelCalculator = parallelCalculator;
+        this.deltsCalculation = deltsCalculation;
+    }
+
+    public void run(){
+        while(true){
+            try {
+                Task task = parallelCalculator.getNextTask( id );
+//                System.out.println("Watek "+ id + " otrzymalem task " + task + " i zaczynam go wykonywać");
+//                System.out.println(id + " sprawdzam pare: " + task.getFirstVector().getDataId() + " i " + task.getSecondVector().getDataId());
+                calculateTask(task);
+            } catch (InterruptedException ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private void calculateTask(Task task){
+        List<Delta> deltas = new ArrayList<Delta>();
+        int delta_id = task.getSmallerId();
+        int checking_index = task.getFirstIndex();
+        Data vector1 = task.getFirstVector();
+        Data vector2 = task.getSecondVector();
+
+        int difference = vector2.getValue(checking_index) - vector1.getValue(checking_index);
+        Delta delta = new Delta(delta_id, checking_index, difference);
+//        System.out.println("watek " + id + " ma delte:" + delta);
+        deltas.add(delta);
+
+        deltsCalculation.returnDelta(deltas);
+    }
+}
+
+
+class Task {
+    private Data dataSet1;
+    private Data dataSet2;
+    private int startIndex;
+    private int endIndex;
+
+    public Task(Data dataSet1, Data dataSet2, int startIndex, int endIndex){
+        this.dataSet1 = dataSet1;
+        this.dataSet2 = dataSet2;
+        this.startIndex = startIndex;
+        this.endIndex = endIndex;
+    }
+
+    public int getSmallerId(){
+        if (dataSet1.getDataId() < dataSet2.getDataId()){
+            return dataSet1.getDataId();
+        } else {
+            return dataSet2.getDataId();
+        }
+    }
+
+    public int getFirstIndex(){
+        return startIndex;
+    }
+
+    public Data getFirstVector(){
+        int id = getSmallerId();
+
+        if (id == dataSet1.getDataId()){
+            return dataSet1;
+        } else {
+            return dataSet2;
+        }
+    }
+
+    public Data getSecondVector(){
+        int id = getSmallerId();
+
+        if (id == dataSet1.getDataId()){
+            return dataSet2;
+        } else {
+            return dataSet1;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "Task{" +
+                dataSet1 +
+                ", " + dataSet2 +
+                ", [" + startIndex +
+                ", " + endIndex +
+                "]}";
+    }
+}
+
+
+class DataSet implements Data {
+    private int id;
+    private int[] vector;
+
+    public DataSet(int id, int[] vector){
+        this.id = id;
+        this.vector = new int[vector.length];
+
+        for(int i=0; i<vector.length; i++){
+            this.vector[i] = vector[i];
+        }
+    }
+
+    /**
+     * Numer zestawu danych. Każdy zestaw danych ma unikalny numer. Zestawy
+     * numerowane są od 0 wzwyż.
+     *
+     * @return liczba całkowita oznaczająca numer zestawu danych
+     */
+    public int getDataId(){
+        return id;
+    }
+
+    /**
+     * Rozmiar zestawu danych. Poprawne indeksy dla danych mieszczą się od 0 do
+     * getSize-1.
+     *
+     * @return liczba danych.
+     */
+    public int getSize(){
+        return vector.length;
+    }
+
+    /**
+     * Odczyt danej z podanego indeksu. Poprawne indeksy dla danych mieszczą się od
+     * 0 do getSize-1.
+     *
+     * @param idx numer indeksu
+     * @return odczytana wartość
+     */
+    public int getValue(int idx){
+        return vector[idx];
+    }
+
+    @Override
+    public String toString() {
+        return "Set{" +
+                "id=" + id +
+                ", " + Arrays.toString(vector) +
+                '}';
+    }
+}
+
+
+class DeltaCollecting {
+    private DeltaReceiver deltaReceiver;
+    private Semaphore sortedDeltsSemaphore;
+    private List<Delta> sortedDelts;
+    private int computingVectorId;
+    private int vectorSize;
+
+
+    public DeltaCollecting(DeltaReceiver deltaReceiver){
+        this.deltaReceiver = deltaReceiver;
+        sortedDeltsSemaphore = new Semaphore(1);
+        sortedDelts = new ArrayList<Delta>();
+        computingVectorId = 1;
+    }
+
+    public void setVectorSize(int size){
+        this.vectorSize = size;
+    }
+
+    public void returnDelta(List<Delta> delts){
+        try {
+            sortedDeltsSemaphore.acquire();
+
+            sortAndSendToReceiver(delts);
+//            System.out.println("Lista delt: " + sortedDelts);
+
+            sortedDeltsSemaphore.release();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sortAndSendToReceiver(List<Delta> newDelts){
+        for (int i=0; i<newDelts.size(); i++){
+            Delta d = newDelts.get(i);
+            addDeltaAndSort(d);
+        }
+        sendDeltsToReceiver();
+    }
+
+    public void addDeltaAndSort(Delta delta){
+        if (sortedDelts.size()==0){
+            sortedDelts.add(delta);
+        } else {
+            for (int i = 0; i< sortedDelts.size(); i++){
+                if (delta.getDataID() < sortedDelts.get(i).getDataID()){
+                    sortedDelts.add(i, delta);
+                    return;
+                }
+            }
+            if (!sortedDelts.contains(delta)){
+                sortedDelts.add(delta);
+            }
+        }
+    }
+
+    public void sendDeltsToReceiver(){
+        if (sortedDelts.size() < vectorSize){
+            return;
+        }
+
+        if (sortedDelts.get(0).getDataID() == computingVectorId){
+            for (int i = 0; i< vectorSize; i++){
+                if (i < sortedDelts.size()){
+                    if (sortedDelts.get(i).getDataID() != computingVectorId) {
+                        return;
+                    }
+                }
+            }
+
+            List<Delta> sublist = new ArrayList<Delta>();
+
+            for (int i = 0; i< vectorSize; i++){
+                Delta vectorToSend = sortedDelts.remove(0);
+                sublist.add(vectorToSend);
+            }
+
+            deltaReceiver.accept(sublist);
+            computingVectorId++;
+            sendDeltsToReceiver();
+        }
+    }
+}
+
+
+class ReceiveOfResults implements DeltaReceiver {
+
+    public void accept( List<Delta> deltas ){
+//        System.out.println("******************************************");
+        System.out.println("Result received: " + deltas);
     }
 }
