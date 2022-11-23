@@ -31,13 +31,13 @@ public class ParallelCalculator implements DeltaParallelCalculator {
      * @param threads liczba wątków.
      */
     public void setThreadsNumber(int threads){
-       setDeltaReceiver(new ReceiveOfResults());
-       countingThreads = new CountingThread[threads];
+        setDeltaReceiver(new ReceiveOfResults());
+        countingThreads = new CountingThread[threads];
 
-       for(int i=0; i<threads; i++){
-           countingThreads[i] = new CountingThread( i, this, collectingDelta);
-       }
-       startThreads();
+        for(int i=0; i<threads; i++){
+            countingThreads[i] = new CountingThread( i, this, collectingDelta);
+        }
+        startThreads();
     }
 
     public void startThreads(){
@@ -110,7 +110,7 @@ public class ParallelCalculator implements DeltaParallelCalculator {
             }
         }
         vectors.removeAll(vectorsToDelete);
-//        System.out.println("LISTA WEKTOROW: " + vectors);
+        System.out.println("LISTA WEKTOROW: " + vectors);
     }
 
     public void addAndSortVectors(Data data){
@@ -173,7 +173,7 @@ class CountingThread extends Thread {
             try {
                 Task task = parallelCalculator.getNextTask( id );
 //                System.out.println("Watek "+ id + " otrzymalem task " + task + " i zaczynam go wykonywać");
-//                System.out.println(id + " sprawdzam pare: " + task.getFirstVector().getDataId() + " i " + task.getSecondVector().getDataId());
+                System.out.println(id + " sprawdzam pare: " + task.getFirstVector().getDataId() + " i " + task.getSecondVector().getDataId());
                 calculateTask(task);
             } catch (InterruptedException ex) {
                 ex.printStackTrace();
@@ -321,7 +321,7 @@ class DeltaCollecting {
         this.deltaReceiver = deltaReceiver;
         sortedDeltsSemaphore = new Semaphore(1);
         sortedDelts = new ArrayList<Delta>();
-        computingVectorId = 1;
+        computingVectorId = 0;
     }
 
     public void setVectorSize(int size){
@@ -383,7 +383,10 @@ class DeltaCollecting {
 
             for (int i = 0; i< vectorSize; i++){
                 Delta vectorToSend = sortedDelts.remove(0);
-                sublist.add(vectorToSend);
+
+                if (vectorToSend.getDelta() != 0) {
+                    sublist.add(vectorToSend);
+                }
             }
 
             deltaReceiver.accept(sublist);
