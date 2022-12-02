@@ -29,6 +29,9 @@ public:
     bool moveRotorsOnePosition(uint *testRotors, int size);
     void deleteRotors(uint *testRotors, int size);
     void setResult(uint *successfulRotors, int size);
+    void calculateNewRotorsPosition(uint *testRotors, int size, int loopCounter);
+
+    void printRotors(uint *rotorsPositions);
 
     virtual ~MPIEnigmaBreaker();
 };

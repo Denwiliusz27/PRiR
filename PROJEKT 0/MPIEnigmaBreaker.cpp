@@ -6,8 +6,11 @@
 #include "MPIEnigmaBreaker.h"
 #include "mpi.h"
 #include <algorithm>
+#include <sys/wait.h>
 
 using namespace std;
+
+const uint MOVEPOSITIONS = 100;
 
 MPIEnigmaBreaker::MPIEnigmaBreaker( Enigma *enigma, MessageComparator *comparator ) : EnigmaBreaker(enigma, comparator){}
 
@@ -81,7 +84,7 @@ void MPIEnigmaBreaker::crackMessage() {
                 // odebranie danych
                 MPI_Recv( receivedRotors, enigma->getNumberOfRotors(), MPI_UNSIGNED, status.MPI_SOURCE, 100, MPI_COMM_WORLD, &status );
 
-                // spradzenie czy wyslane ustawienie rotorow nie jest fałszywe - tzn. nie znaleziono rozwiązania
+                // spradzenie czy odebrane ustawienie rotorow nie jest fałszywe - tzn. nie znaleziono rozwiązania
                 if (receivedRotors[0] == enigma->getLargestRotorSetting()+1){
                     // rotory sie nie zmieniły to wyjdź
                     if (!ifRotorsMoved){
@@ -91,9 +94,16 @@ void MPIEnigmaBreaker::crackMessage() {
                     // wyślij ustawienie rotorów mówiące, że
                     MPI_Send(testRotors, enigma->getNumberOfRotors(), MPI_UNSIGNED, status.MPI_SOURCE, 100, MPI_COMM_WORLD);
 
-                    // przesuń rotory o 1 pozycje
+                    // przesuń rotory o 100 pozycji
                     if (ifRotorsMoved){
-                        ifRotorsMoved = moveRotorsOnePosition(testRotors, enigma->getNumberOfRotors());
+//                        cout << " PROCES 0: wyslalem ustawienie: ";
+//                        printRotors(testRotors);
+//                        sleep( 3 );
+                        calculateNewRotorsPosition(testRotors, enigma->getNumberOfRotors(), MOVEPOSITIONS+1);
+//                        cout << " PROCES 0: nowe ustawienie: ";
+//                        printRotors(testRotors);
+
+//                        ifRotorsMoved = moveRotorsOnePosition(testRotors, enigma->getNumberOfRotors());
                     }
 
                     // ustaw rotory na wartość max + 1
@@ -119,6 +129,9 @@ void MPIEnigmaBreaker::crackMessage() {
 
             // skoro nikt nie prosi o dane to samemu szukaj rozwiązania
             if (ifRotorsMoved) {
+//                cout << "sam sobie licze: ";
+//                printRotors(testRotors);
+
                 bool success = solutionFound(testRotors);
                 if (success){
                     setResult(testRotors, enigma->getNumberOfRotors());
@@ -142,18 +155,39 @@ void MPIEnigmaBreaker::crackMessage() {
             // odbierz rotory do sprawdzenia
             MPI_Recv(taskRotors, enigma->getNumberOfRotors(), MPI_UNSIGNED, 0, 100, MPI_COMM_WORLD, &status);
 
+//            cout << rank << ": dostalem ustawienie: ";
+//            printRotors(taskRotors);
+
             // odebrano fałszywe ustawienie == koniec pracy
             if (taskRotors[0] == enigma->getLargestRotorSetting()+1) {
                 return;
             } else {
-                // ssprawdź czy ustawienie jest rozwiązaniem
-                bool success = solutionFound(taskRotors);
+//                sleep(3);
+                // sprawdź czy ustawienie jest rozwiązaniem
+                for(int i=0; i<MOVEPOSITIONS; i++){
+                    bool success = solutionFound(taskRotors);
 
-                if (success){
-                } else {
-                    // nie znaleziono rozwiązania - ustaw rotory na fałszywe ustawienie
-                    deleteRotors(taskRotors, enigma->getNumberOfRotors());
+                    if (success){
+                        break;
+                    } else {
+                        moveRotorsOnePosition(taskRotors, enigma->getNumberOfRotors());
+                    }
                 }
+
+//                cout << rank << ": koncze prace z ustawieniem: ";
+//                printRotors(taskRotors);
+
+                // nie znaleziono rozwiązania - ustaw rotory na fałszywe ustawienie
+                deleteRotors(taskRotors, enigma->getNumberOfRotors());
+
+
+//                bool success = solutionFound(taskRotors);
+//
+//                if (success){
+//                } else {
+//                    // nie znaleziono rozwiązania - ustaw rotory na fałszywe ustawienie
+//                    deleteRotors(taskRotors, enigma->getNumberOfRotors());
+//                }
             }
         }
     }
@@ -188,6 +222,26 @@ bool MPIEnigmaBreaker::moveRotorsOnePosition(uint *testRotors, int size){
         testRotors[index] += 1;
     }
     return true;
+}
+
+// ustaw rotory na nowa pozycje
+void MPIEnigmaBreaker::calculateNewRotorsPosition(uint *testRotors, int size, int loopCounter){
+    int index = size-1;
+    int newValue = 0;
+
+//    cout << "~~zaczynam obliczanie nowej pozycji od: ";
+//    printRotors(testRotors);
+
+    for (int i=index; i>=0; i--){
+        newValue = (loopCounter + testRotors[i]) % (enigma->getLargestRotorSetting() + 1);
+        loopCounter = (loopCounter + testRotors[i])  / (enigma->getLargestRotorSetting() + 1);
+        testRotors[i] = newValue;
+//        cout << "new Value: " << newValue << endl;
+//        cout << "loop c: " << newValue << endl;
+    }
+
+//    cout << "~~koncze obliczanie nowej pozycji na: ";
+//    printRotors(testRotors);
 }
 
 
@@ -233,4 +287,13 @@ void MPIEnigmaBreaker::getResult( uint *rotorPositions ) {
     for ( uint rotor = 0; rotor < rotors; rotor++ ) {
         rotorPositions[ rotor ] = this->rotorPositions[ rotor ];
     }
+}
+
+
+void MPIEnigmaBreaker::printRotors(uint *rotorsPositions){
+    cout << "[";
+    for (uint rotor = 0; rotor<rotors; rotor++){
+        cout << rotorsPositions[rotor] << ", " ;
+    }
+    cout << "]" << endl;
 }
