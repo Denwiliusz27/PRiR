@@ -24,6 +24,10 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
 
     @Override
     public void configuration(int seats, long timeForConfirmation) throws RemoteException {
+        if (seats <= 0 || timeForConfirmation <= 0){
+            return;
+        }
+
         this.timeForConfirmation = timeForConfirmation;
         owners = new String[seats];
 
@@ -39,56 +43,93 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
 
     @Override
     public boolean reservation(String user, Set<Integer> seats) throws RemoteException {
+        if (seats.size() == 0 ){
+            return false;
+        }
+
         Set<Integer> available = new HashSet<>();
 
         cleanReservations();
 
-        for (int seat:seats) {
-            if (avaliableSeats.contains(seat)){
-                available.add(seat);
+        boolean ok = true;
+
+        synchronized (avaliableSeats){
+            for (int seat:seats) {
+                if (avaliableSeats.contains(seat)){
+                    available.add(seat);
+                } else {
+                    ok = false;
+                }
             }
+            if (!ok) {
+                return false;
+            }
+
+            reservations.put(user, available);
+            timeOfReservation.put(user, System.currentTimeMillis());
+            avaliableSeats.removeAll(available);
+
+            return true;
         }
-
-        if (available.size() == 0) {
-            return false;
-        }
-
-        reservations.put(user, available);
-        timeOfReservation.put(user, System.currentTimeMillis());
-        avaliableSeats.removeAll(available);
-
-        return true;
     }
 
     @Override
     public boolean confirmation(String user) throws RemoteException {
-        return false;
+        synchronized (reservations){
+            if (reservations.containsKey(user)){
+                Integer[] seats = reservations.get(user).toArray(new Integer[reservations.size()]);
+                long now = System.currentTimeMillis() - timeForConfirmation;
+                long v = timeOfReservation.get(user);
+
+                reservations.remove(user);
+                timeOfReservation.remove(user);
+
+                if( v >= now){
+                    for(int seat:seats){
+                        owners[seat] = user;
+                    }
+                    return true;
+                }
+
+                return false;
+            } else {
+                return false;
+            }
+        }
     }
 
     @Override
     public String whoHasReservation(int seat) throws RemoteException {
-        return owners[seat];
+        if (seat <= 0 || seat >= owners.length ){
+            return "";
+        }
+
+        synchronized (owners){
+            return owners[seat];
+        }
     }
 
     private void cleanReservations(){
         long now = System.currentTimeMillis() - timeForConfirmation;
         Map<String, Long> timesToRemove = new HashMap<>();
 
-        for (String key:timeOfReservation.keySet()){
-            if (timeOfReservation.get(key) < now){
-                timesToRemove.put(key, timeOfReservation.get(key));
-                Set<Integer> seats = reservations.get(key);
+        synchronized (timeOfReservation){
+            for (String key:timeOfReservation.keySet()){
+                if (timeOfReservation.get(key) < now){
+                    timesToRemove.put(key, timeOfReservation.get(key));
+                    Set<Integer> seats = reservations.get(key);
 
-                for (int seat: seats){
-                    avaliableSeats.add(seat);
+                    for (int seat: seats){
+                        avaliableSeats.add(seat);
+                    }
+
+                    reservations.remove(key);
                 }
-
-                reservations.remove(key);
             }
-        }
 
-        for (String time:timesToRemove.keySet()){
-            timeOfReservation.remove(time);
+            for (String time:timesToRemove.keySet()){
+                timeOfReservation.remove(time);
+            }
         }
     }
 }
