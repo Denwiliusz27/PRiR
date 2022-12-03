@@ -25,7 +25,6 @@ public:
     void setMaxRotors();
     void setSampleToFind(uint *expected, uint expectedLength ) override;
     int changeRotorsPositions(uint* rotorsPositions, int nr);
-    void drukujRotory();
     bool moveRotorsOnePosition(uint *testRotors, int size);
     void deleteRotors(uint *testRotors, int size);
     void setResult(uint *successfulRotors, int size);

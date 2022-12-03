@@ -66,9 +66,7 @@ void MPIEnigmaBreaker::crackMessage() {
     if (rank == 0){
         MPI_Status status;
         bool ifRotorsMoved = true;
-        int childProcess = 1;
         uint *testRotors = new uint[enigma->getNumberOfRotors()];
-//        uint *receivedRotors = new uint[enigma->getNumberOfRotors()];
         int nrOfProcesses = size;
         uint64_t possibleRotorsPositions = pow((enigma->getLargestRotorSetting()+1), enigma->getNumberOfRotors());
         uint *test = new uint[enigma->getNumberOfRotors()];
@@ -122,10 +120,6 @@ void MPIEnigmaBreaker::crackMessage() {
                     dataToSend[0] = startRotorsPosition;
                     dataToSend[1] = endRotorsPosition;
 
-//                    cout << "~~~ 0: wysyłam ustawienie rotorów od: " << startRotorsPosition << " do " << endRotorsPosition << " - ";
-//                    printRotors(testRotors);
-//                    sleep(1);
-
                     // wyślij zakres pozycji rotorów do sprawdzenia
                     MPI_Send(dataToSend, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, 100, MPI_COMM_WORLD);
 
@@ -143,13 +137,10 @@ void MPIEnigmaBreaker::crackMessage() {
 
                     // otrzymano pozycje rotorów która nie jest fałszywa - znaleziono rozwiązanie
                 } else {
-//                    cout << "~~~ odebrana pozycja: " << dataReceived[0] << endl;
                     ifRotorsMoved = false;
 
                     // otrzymana pozycja zamieniana na układ rotorów i ustawiana jako result
                     calculateNewRotorsPosition(test, enigma->getNumberOfRotors(), dataReceived[0]);
-//                    Debug("~~~ Rotory z tej pozycji:");
-//                    printRotors(test);
                     setResult(test, enigma->getNumberOfRotors());
 
                     // do potomków wysyłane fałszywy zakres = -1 - komunikat że to koniec pracy
@@ -161,19 +152,15 @@ void MPIEnigmaBreaker::crackMessage() {
                 }
 
                 MPI_Iprobe(MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &flag , &status );
-
             }
 
             // skoro nikt nie prosi o dane to samemu szukaj rozwiązania
             if (ifRotorsMoved) {
                 bool success = solutionFound(testRotors);
                 if (success){
-//                    cout << "~~~ sam znalazlem rozwiazanie na poz: " << startRotorsPosition << endl;
                     setResult(testRotors, enigma->getNumberOfRotors());
                     ifRotorsMoved = false;
                 } else {
-//                    cout << "~~~ 0: obliczam sam ustawienie: " << startRotorsPosition << " - ";
-//                    printRotors(testRotors);
                     ifRotorsMoved = moveRotorsOnePosition(testRotors, enigma->getNumberOfRotors());
                     startRotorsPosition += 1;
                 }
@@ -197,15 +184,12 @@ void MPIEnigmaBreaker::crackMessage() {
 
             // odebrano fałszywy zakres == koniec pracy
             if (dataReceived[0] == -1) {
-//                Debug(rank << " zakonczyl prace");
                 return;
             } else {
                 bool success;
                 calculateNewRotorsPosition(taskRotors, enigma->getNumberOfRotors(), dataReceived[0]);
 
                 for (int i=dataReceived[0]; i<=dataReceived[1]; i++){
-//                    cout << " ### " << rank << ": obliczam ustawienie z nr: " << i << " - ";
-//                    printRotors(taskRotors);
                     success = solutionFound(taskRotors);
 
                     // sprawdź czy ustawienie jest rozwiązaniem
@@ -213,17 +197,9 @@ void MPIEnigmaBreaker::crackMessage() {
                         position = calculatePositionFromRotors(taskRotors, enigma->getNumberOfRotors());
                         dataReceived[0] = position;
                         dataReceived[1] = position;
-//                        cout << "### " << rank << ": wysylam ustawienie z petli: " << position << endl;
-//                        cout << "### " << rank << ": aktualne i: " << i << endl;
-//                        cout << "### " << rank << ": obecne ustawienie rotorow w petli: " << endl;
-//                        printRotors(taskRotors);
 
-//                        cout << "^^^^^^^^ obliczone na nowo pozycje ^^^^^^^^^^^^^" << endl;
                         uint *test = new uint[enigma->getNumberOfRotors()];
                         calculateNewRotorsPosition(test, enigma->getNumberOfRotors(), position);
-//                        printRotors(test);
-//                        cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << endl;
-
                         break;
                     } else {
                         moveRotorsOnePosition(taskRotors, enigma->getNumberOfRotors());
@@ -240,7 +216,7 @@ void MPIEnigmaBreaker::crackMessage() {
     }
 }
 
-
+// konwertuje nr pozycji na odpowiadajace ustawienie rotorow
 void MPIEnigmaBreaker::calculateNewRotorsPosition(uint *testRotors, int size, uint64_t positionNr){
     uint x_power_n;
 
@@ -251,22 +227,18 @@ void MPIEnigmaBreaker::calculateNewRotorsPosition(uint *testRotors, int size, ui
     }
 }
 
-
-
+// konwertuje ustawienie rotorow na nr pozycji
 uint64_t MPIEnigmaBreaker::calculatePositionFromRotors(uint *testRotors, int size){
     uint64_t value = 0;
 
     for(int n=size-1; n>=0; n--){
         value += testRotors[size-n-1] * calculatePow(enigma->getLargestRotorSetting()+1, n);
-
-
-//        powValue = pow(n, enigma->getLargestRotorSetting());
-//        value += pow(testRotors[n], powValue);
     }
 
     return value;
 }
 
+// oblicza wartosc x^n
 uint64_t MPIEnigmaBreaker::calculatePow(uint64_t x, int n){
     uint64_t result = 1;
 
@@ -276,8 +248,6 @@ uint64_t MPIEnigmaBreaker::calculatePow(uint64_t x, int n){
 
     return result;
 }
-
-
 
 
 // ustawia rotory na fałszywe ustawienie - max + 1
