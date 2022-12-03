@@ -31,6 +31,8 @@ public:
     void setResult(uint *successfulRotors, int size);
     void printRotors(uint *rotorsPositions);
     void calculateNewRotorsPosition(uint *testRotors, int size, uint64_t positionNr);
+    uint64_t calculatePositionFromRotors(uint *testRotors, int size);
+    uint64_t calculatePow(uint64_t x, int n);
 
     virtual ~MPIEnigmaBreaker();
 };

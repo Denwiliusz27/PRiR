@@ -19,9 +19,6 @@
 
 using namespace std;
 
-const uint ROTORSSEND = 100;
-const uint POSITIONSEND = 200;
-
 
 MPIEnigmaBreaker::MPIEnigmaBreaker( Enigma *enigma, MessageComparator *comparator ) : EnigmaBreaker(enigma, comparator){}
 
@@ -71,14 +68,16 @@ void MPIEnigmaBreaker::crackMessage() {
         bool ifRotorsMoved = true;
         int childProcess = 1;
         uint *testRotors = new uint[enigma->getNumberOfRotors()];
-        uint *receivedRotors = new uint[enigma->getNumberOfRotors()];
+//        uint *receivedRotors = new uint[enigma->getNumberOfRotors()];
         int nrOfProcesses = size;
         uint64_t possibleRotorsPositions = pow((enigma->getLargestRotorSetting()+1), enigma->getNumberOfRotors());
+        uint *test = new uint[enigma->getNumberOfRotors()];
 
         uint64_t startRotorsPosition = 0;
         uint64_t endRotorsPosition = 0;
 
         uint64_t *dataToSend = new uint64_t[2];
+        uint64_t *dataReceived = new uint64_t[2];
 
         for (int i=0; i < enigma->getNumberOfRotors(); i++){
             testRotors[i] = 0;
@@ -88,7 +87,7 @@ void MPIEnigmaBreaker::crackMessage() {
 
         while(true){
             // sprawdza czy nikt nic nie przysłał
-            MPI_Iprobe(MPI_ANY_SOURCE, ROTORSSEND, MPI_COMM_WORLD, &flag , &status );
+            MPI_Iprobe(MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &flag , &status );
 
             // jeśli jestem ostatnim procesem to wyjdź
             if ( nrOfProcesses == 1 and !ifRotorsMoved ){
@@ -98,24 +97,19 @@ void MPIEnigmaBreaker::crackMessage() {
             // dopóki ktoś prosi o dane to:
             while(flag) {
                 // odebranie danych
-                MPI_Recv( receivedRotors, enigma->getNumberOfRotors(), MPI_UNSIGNED, status.MPI_SOURCE, ROTORSSEND, MPI_COMM_WORLD, &status );
+                MPI_Recv( dataReceived, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, 100, MPI_COMM_WORLD, &status );
 
-                // spradzenie czy odebrane ustawienie rotorow nie jest fałszywe (równe max+1) - tzn. nie znaleziono rozwiązania
-                if (receivedRotors[0] == enigma->getLargestRotorSetting()+1){
-                    Debug("+++++++++++++++++jeszcze dziala " << nrOfProcesses << " procesow" );
-
+                // spradzenie czy odebrana pozycja rotorow nie jest fałszywe (== 0) - tzn. nie znaleziono rozwiązania
+                if (dataReceived[0] == 0){
 
                     // rotory sie nie zmieniły to wyjdź
                     if (!ifRotorsMoved){
-                        dataToSend[0] = 0;
-                        dataToSend[1] = 0;
+                        dataToSend[0] = -1;
+                        dataToSend[1] = -1;
 
-                        cout << "informuje ze trzeba skonczyc" << endl;
-                        MPI_Send(dataToSend, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, POSITIONSEND, MPI_COMM_WORLD);
-                        cout << "~~~poinformowane" << endl;
+                        MPI_Send(dataToSend, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, 100, MPI_COMM_WORLD);
 
                         nrOfProcesses -= 1;
-                        Debug("jeszcze dziala " << nrOfProcesses << " procesow" );
                         break;
                     }
 
@@ -128,59 +122,57 @@ void MPIEnigmaBreaker::crackMessage() {
                     dataToSend[0] = startRotorsPosition;
                     dataToSend[1] = endRotorsPosition;
 
+//                    cout << "~~~ 0: wysyłam ustawienie rotorów od: " << startRotorsPosition << " do " << endRotorsPosition << " - ";
+//                    printRotors(testRotors);
+//                    sleep(1);
 
-                    // wyślij ustawienie rotorów mówiące, że
-                    MPI_Send(dataToSend, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, POSITIONSEND, MPI_COMM_WORLD);
-
+                    // wyślij zakres pozycji rotorów do sprawdzenia
+                    MPI_Send(dataToSend, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, 100, MPI_COMM_WORLD);
 
                     // przesuń rotory na pozycje endRotorsPosition
                     if (ifRotorsMoved){
-//                        cout << "Proces 0: wyslalem rotory:";
-//                        printRotors(testRotors);
-                        calculateNewRotorsPosition(testRotors, enigma->getNumberOfRotors(), endRotorsPosition);
-//                        sleep( 3 );
-//                        cout << "PROCES 0: przesunalem rotory na pozycje " << endRotorsPosition  << endl;
-//                        printRotors(testRotors);
-                        startRotorsPosition = endRotorsPosition;
-
-
-                        // ifRotorsMoved = moveRotorsOnePosition(testRotors, enigma->getNumberOfRotors());
+                        startRotorsPosition = endRotorsPosition+1;
+                        calculateNewRotorsPosition(testRotors, enigma->getNumberOfRotors(), startRotorsPosition);
                     }
 
-                    // ustaw rotory na wartość max + 1
-                    if (!ifRotorsMoved || (endRotorsPosition == possibleRotorsPositions)){
-                        deleteRotors(testRotors, enigma->getNumberOfRotors());
+                    // ustaw zakresy do wysłania jako -1 - aby procesy zakonczyły prace
+                    if (!ifRotorsMoved || endRotorsPosition == possibleRotorsPositions){
+                        dataToSend[0] = -1;
+                        dataToSend[1] = -1;
                     }
 
-                    // przesłane ustawienie rotorów nie jest fałszywe - znaleziono rozwiązanie
+                    // otrzymano pozycje rotorów która nie jest fałszywa - znaleziono rozwiązanie
                 } else {
+//                    cout << "~~~ odebrana pozycja: " << dataReceived[0] << endl;
                     ifRotorsMoved = false;
-                    // znalezione rozwiązanie jest ustawiane jako result
-                    setResult(receivedRotors, enigma->getNumberOfRotors());
 
-                    // do potomków wysyłane fałszywe ustawienie == komunikat że to koniec pracy
-                    deleteRotors(testRotors, enigma->getNumberOfRotors());
+                    // otrzymana pozycja zamieniana na układ rotorów i ustawiana jako result
+                    calculateNewRotorsPosition(test, enigma->getNumberOfRotors(), dataReceived[0]);
+//                    Debug("~~~ Rotory z tej pozycji:");
+//                    printRotors(test);
+                    setResult(test, enigma->getNumberOfRotors());
 
-                    dataToSend[0] = 0;
-                    dataToSend[1] = 0;
+                    // do potomków wysyłane fałszywy zakres = -1 - komunikat że to koniec pracy
+                    dataToSend[0] = -1;
+                    dataToSend[1] = -1;
 
-                    cout << "################################## koniec? " << endl;
-                    MPI_Send(dataToSend,2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, POSITIONSEND, MPI_COMM_WORLD);
+                    MPI_Send(dataToSend,2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, 100, MPI_COMM_WORLD);
                     nrOfProcesses -= 1;
-                    Debug("~~~~jeszcze dziala " << nrOfProcesses << " procesow" );
                 }
-                MPI_Iprobe(MPI_ANY_SOURCE, ROTORSSEND, MPI_COMM_WORLD, &flag , &status );
+
+                MPI_Iprobe(MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &flag , &status );
+
             }
 
             // skoro nikt nie prosi o dane to samemu szukaj rozwiązania
             if (ifRotorsMoved) {
                 bool success = solutionFound(testRotors);
                 if (success){
+//                    cout << "~~~ sam znalazlem rozwiazanie na poz: " << startRotorsPosition << endl;
                     setResult(testRotors, enigma->getNumberOfRotors());
-                    deleteRotors(testRotors, enigma->getNumberOfRotors());
                     ifRotorsMoved = false;
                 } else {
-//                    cout << "PROCES 0: sam sobie popracuje:";
+//                    cout << "~~~ 0: obliczam sam ustawienie: " << startRotorsPosition << " - ";
 //                    printRotors(testRotors);
                     ifRotorsMoved = moveRotorsOnePosition(testRotors, enigma->getNumberOfRotors());
                     startRotorsPosition += 1;
@@ -190,45 +182,48 @@ void MPIEnigmaBreaker::crackMessage() {
     } else {
         uint *taskRotors = new uint[enigma->getNumberOfRotors()];
         MPI_Status status;
+        uint64_t position;
 
         uint64_t *dataReceived = new uint64_t[2];
-
-        deleteRotors(taskRotors, enigma->getNumberOfRotors() );
+        dataReceived[0] = 0;
+        dataReceived[1] = 0;
 
         while(true){
-            // wyślij prośbe o dane - fałszywe ustawienie rotorów, lub właściwe ustawienie = rozwiązanie
-            MPI_Send(taskRotors, enigma->getNumberOfRotors(), MPI_UNSIGNED, 0, ROTORSSEND, MPI_COMM_WORLD);
+            // wyślij prośbe o dane - fałszywy zakres pozycji = 0, lub właściwą pozycje = rozwiązanie
+            MPI_Send(dataReceived, 2, MPI_UNSIGNED_LONG_LONG, 0, 100, MPI_COMM_WORLD);
 
-            // odbierz rotory do sprawdzenia
-            MPI_Recv(dataReceived, 2, MPI_UNSIGNED_LONG_LONG, 0, POSITIONSEND, MPI_COMM_WORLD, &status);
+            // odbierz zakres do sprawdzenia
+            MPI_Recv(dataReceived, 2, MPI_UNSIGNED_LONG_LONG, 0, 100, MPI_COMM_WORLD, &status);
 
-            calculateNewRotorsPosition(taskRotors, enigma->getNumberOfRotors(), dataReceived[0]);
-//            cout << "~~" << rank << ": Odebralem ustawienie:";
-//            printRotors(taskRotors);
-
-
-//            for (int i=0; i<enigma->getNumberOfRotors(); i++){
-//                cout << dataReceived[i] << ", ";
-//                taskRotors[i] = dataReceived[i];
-//            }
-//            cout << "]" << endl;
-
-
-            // odebrano fałszywe ustawienie == koniec pracy
-            if (dataReceived[0] == 0) {
-                Debug(rank << " zakonczyl prace");
+            // odebrano fałszywy zakres == koniec pracy
+            if (dataReceived[0] == -1) {
+//                Debug(rank << " zakonczyl prace");
                 return;
             } else {
                 bool success;
+                calculateNewRotorsPosition(taskRotors, enigma->getNumberOfRotors(), dataReceived[0]);
+
                 for (int i=dataReceived[0]; i<=dataReceived[1]; i++){
-
-//                    cout << "~~PROCES" << rank << ": obliczam ustawienie: ";
+//                    cout << " ### " << rank << ": obliczam ustawienie z nr: " << i << " - ";
 //                    printRotors(taskRotors);
-
                     success = solutionFound(taskRotors);
 
                     // sprawdź czy ustawienie jest rozwiązaniem
                     if (success){
+                        position = calculatePositionFromRotors(taskRotors, enigma->getNumberOfRotors());
+                        dataReceived[0] = position;
+                        dataReceived[1] = position;
+//                        cout << "### " << rank << ": wysylam ustawienie z petli: " << position << endl;
+//                        cout << "### " << rank << ": aktualne i: " << i << endl;
+//                        cout << "### " << rank << ": obecne ustawienie rotorow w petli: " << endl;
+//                        printRotors(taskRotors);
+
+//                        cout << "^^^^^^^^ obliczone na nowo pozycje ^^^^^^^^^^^^^" << endl;
+                        uint *test = new uint[enigma->getNumberOfRotors()];
+                        calculateNewRotorsPosition(test, enigma->getNumberOfRotors(), position);
+//                        printRotors(test);
+//                        cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << endl;
+
                         break;
                     } else {
                         moveRotorsOnePosition(taskRotors, enigma->getNumberOfRotors());
@@ -236,8 +231,9 @@ void MPIEnigmaBreaker::crackMessage() {
                 }
 
                 if (!success){
-                    // nie znaleziono rozwiązania - ustaw rotory na fałszywe ustawienie
-                    deleteRotors(taskRotors, enigma->getNumberOfRotors());
+                    // nie znaleziono rozwiązania - ustaw zakres na fałszywe ustawienie
+                    dataReceived[0] = 0;
+                    dataReceived[1] = 0;
                 }
             }
         }
@@ -246,17 +242,42 @@ void MPIEnigmaBreaker::crackMessage() {
 
 
 void MPIEnigmaBreaker::calculateNewRotorsPosition(uint *testRotors, int size, uint64_t positionNr){
-    int rotorState;
-    int x_power_n;
+    uint x_power_n;
 
     for (int n=size-1; n>=0; n--){
-//        cout << "Mam rotor: " << n << " o wartosci: " << testRotors[n] << endl;
-        x_power_n = pow(enigma->getLargestRotorSetting(), n);
+        x_power_n = calculatePow(enigma->getLargestRotorSetting()+1, n);
         testRotors[size-n-1] = positionNr / x_power_n;
         positionNr -= testRotors[size-n-1] * x_power_n;
-//        cout << "n:" << n << " x^n:" << x_power_n << " stan:" << testRotors[size-n-1] << endl;
     }
 }
+
+
+
+uint64_t MPIEnigmaBreaker::calculatePositionFromRotors(uint *testRotors, int size){
+    uint64_t value = 0;
+
+    for(int n=size-1; n>=0; n--){
+        value += testRotors[size-n-1] * calculatePow(enigma->getLargestRotorSetting()+1, n);
+
+
+//        powValue = pow(n, enigma->getLargestRotorSetting());
+//        value += pow(testRotors[n], powValue);
+    }
+
+    return value;
+}
+
+uint64_t MPIEnigmaBreaker::calculatePow(uint64_t x, int n){
+    uint64_t result = 1;
+
+    for(int i=0; i<n; i++){
+        result *= x;
+    }
+
+    return result;
+}
+
+
 
 
 // ustawia rotory na fałszywe ustawienie - max + 1
