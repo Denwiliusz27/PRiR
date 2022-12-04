@@ -97,8 +97,8 @@ void MPIEnigmaBreaker::crackMessage() {
                 // odebranie danych
                 MPI_Recv( dataReceived, 2, MPI_UNSIGNED_LONG_LONG, status.MPI_SOURCE, 100, MPI_COMM_WORLD, &status );
 
-                // spradzenie czy odebrana pozycja rotorow nie jest fałszywe (== 0) - tzn. nie znaleziono rozwiązania
-                if (dataReceived[0] == 0){
+                // spradzenie czy odebrana pozycja rotorow nie jest fałszywe (== -2) - tzn. nie znaleziono rozwiązania
+                if (dataReceived[0] == -2){
 
                     // rotory sie nie zmieniły to wyjdź
                     if (!ifRotorsMoved){
@@ -111,8 +111,8 @@ void MPIEnigmaBreaker::crackMessage() {
                         break;
                     }
 
-                    if (startRotorsPosition + 10 <= possibleRotorsPositions){
-                        endRotorsPosition = startRotorsPosition + 10;
+                    if (startRotorsPosition + 100 <= possibleRotorsPositions){
+                        endRotorsPosition = startRotorsPosition + 100;
                     } else {
                         endRotorsPosition = possibleRotorsPositions;
                     }
@@ -172,8 +172,8 @@ void MPIEnigmaBreaker::crackMessage() {
         uint64_t position;
 
         uint64_t *dataReceived = new uint64_t[2];
-        dataReceived[0] = 0;
-        dataReceived[1] = 0;
+        dataReceived[0] = -2;
+        dataReceived[1] = -2;
 
         while(true){
             // wyślij prośbe o dane - fałszywy zakres pozycji = 0, lub właściwą pozycje = rozwiązanie
@@ -208,8 +208,8 @@ void MPIEnigmaBreaker::crackMessage() {
 
                 if (!success){
                     // nie znaleziono rozwiązania - ustaw zakres na fałszywe ustawienie
-                    dataReceived[0] = 0;
-                    dataReceived[1] = 0;
+                    dataReceived[0] = -2;
+                    dataReceived[1] = -2;
                 }
             }
         }
