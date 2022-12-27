@@ -1,15 +1,12 @@
-import java.lang.reflect.Array;
 import java.util.*;
-import java.util.concurrent.Semaphore;
 
 
 public class ParallelCalculator implements DeltaParallelCalculator {
     private List<Data> vectors = new ArrayList<Data>(); // lista wektorów
     private HashMap<Integer, Integer> calculationsAmount = new HashMap<Integer, Integer>(); // mapa ile który wektor był obliczany
-    private CountingThread[] countingThreads;
+
+    private int nrOfThreads;
     private List<Task> tasks = new ArrayList<Task>();
-    private Semaphore waitForTasks = new Semaphore(0);
-    private Semaphore tasksSemaphore = new Semaphore(1);
     private DeltaReceiver deltaReceiver;
     private DeltaCollecting collectingDelta;
 
@@ -21,20 +18,15 @@ public class ParallelCalculator implements DeltaParallelCalculator {
      * @param threads liczba wątków.
      */
     public void setThreadsNumber(int threads){
-        setDeltaReceiver(new ReceiveOfResults());
-        countingThreads = new CountingThread[threads];
-
-        for(int i=0; i<threads; i++){
-            countingThreads[i] = new CountingThread( i, this, collectingDelta);
-        }
-        startThreads();
+//        setDeltaReceiver(new ReceiveOfResults());
+        nrOfThreads = threads;
     }
 
-    public void startThreads(){
-        for (CountingThread countingThread : countingThreads) {
-            countingThread.start();
-        }
-    }
+//    public void startThreads(){
+//        for (CountingThread countingThread : countingThreads) {
+//            countingThread.start();
+//        }
+//    }
 
     /**
      * Przekazany jako parametr obiekt ma być używany
@@ -60,21 +52,54 @@ public class ParallelCalculator implements DeltaParallelCalculator {
 //        System.out.println("lista wektorów w kalkulatorze: " + vectors);
         List<Data> vectorsToDelete = new ArrayList<Data>();
 
+        Data data1;
+        Data data2;
+
         for (Data vectorFromList : vectors) {
             if (calculationsAmount.get(vectorFromList.getDataId()) == null) {
                 continue;
             }
 
             if ((vectorFromList.getDataId() == data.getDataId() + 1) || (vectorFromList.getDataId() == data.getDataId() - 1)) {
-                for (int j = 0; j < vectorFromList.getSize(); j++) {
-                    Task newTask = new Task(vectorFromList, data, j, j);
 
-//                    tasksSemaphore.acquireUninterruptibly(); // rozpoczynam ochrone listy taskow
-                    sortTasks(newTask);
-//                    System.out.println("Ilosc tasków: " + tasks.size() + " lista: "+ tasks);
-//                    tasksSemaphore.release(); // koncze ochrone listy taskow
-                    waitForTasks.release(); // dodaj do semafora 1
+                data1 = vectorFromList;
+                data2 = data;  // koniec ifa i fora
+
+
+                int chunk = vectorFromList.getSize() / nrOfThreads;
+                if (chunk == 0){
+                    chunk = 1;
                 }
+
+
+                for (int j = 0; j < vectorFromList.getSize(); j += chunk) {
+                    int endIdx = Math.min(vectorFromList.getSize(), j+chunk);
+                    Task newTask = new Task(vectorFromList, data, j, endIdx);
+
+                    sortTasks(newTask);
+                }
+
+                var countingThreads = new CountingThread[nrOfThreads];
+
+                for(int i=1; i<nrOfThreads; i++){
+                    countingThreads[i] = new CountingThread( this, collectingDelta);
+                    countingThreads[i].start();
+                }
+
+                countingThreads[0] = new CountingThread( this, collectingDelta);
+                countingThreads[0].run();
+
+
+
+                for(int i=1; i<countingThreads.length; i++){
+                    try {
+                        countingThreads[i].join();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+
 
                 int vectorFromListCounter = calculationsAmount.get(vectorFromList.getDataId());
                 int dataCounter = calculationsAmount.get(data.getDataId());
@@ -114,30 +139,18 @@ public class ParallelCalculator implements DeltaParallelCalculator {
         synchronized (tasks){
             tasks.add(task);
             tasks.sort((Task task1,Task task2) -> task2.getSmallerId() - task1.getSmallerId());
-//
-//            if (tasks.size() == 0){
-//                tasks.add(task);
-//            } else {
-//                for (int i = 0; i< tasks.size(); i++){
-//                    if (task.getSmallerId() < tasks.get(i).getSmallerId()){
-//                        tasks.add(i, task);
-//                        return;
-//                    }
-//                }
-//                if (!tasks.contains(task)){
-//                    tasks.add(task);
-//                }
-//            }
         }
-
     }
 
     public Task getNextTask(){
 //        System.out.println("Watek " + id+ " stoi przed semaforem");
         Task taskFromList;
 
-        waitForTasks.acquireUninterruptibly(); // stoi w miejscu dla 0 lub wykonuje -1 jesli jest dodatni
         synchronized (tasks){
+            if (tasks.size() == 0){
+                return null;
+            }
+
             taskFromList = tasks.remove(0);
         }
 
@@ -147,12 +160,10 @@ public class ParallelCalculator implements DeltaParallelCalculator {
 
 
 class CountingThread extends Thread {
-    private int id;
     private ParallelCalculator parallelCalculator;
     private DeltaCollecting deltsCalculation;
 
-    public CountingThread(int id, ParallelCalculator parallelCalculator, DeltaCollecting deltsCalculation){ // 4 parametr Semaphore ochrona receivera
-        this.id = id;
+    public CountingThread(ParallelCalculator parallelCalculator, DeltaCollecting deltsCalculation){
         this.parallelCalculator = parallelCalculator;
         this.deltsCalculation = deltsCalculation;
     }
@@ -162,21 +173,27 @@ class CountingThread extends Thread {
             Task task = parallelCalculator.getNextTask( );
 //                System.out.println("Watek "+ id + " otrzymalem task " + task + " i zaczynam go wykonywać");
 //                System.out.println(id + " sprawdzam pare: " + task.getFirstVector().getDataId() + " i " + task.getSecondVector().getDataId());
+            if (task == null){
+                return;
+            }
+
             calculateTask(task);
         }
     }
 
     private void calculateTask(Task task){
+
         List<Delta> deltas = new ArrayList<Delta>();
         int delta_id = task.getSmallerId();
         int checking_index = task.getFirstIndex();
         Data vector1 = task.getFirstVector();
         Data vector2 = task.getSecondVector();
 
-        int difference = vector2.getValue(checking_index) - vector1.getValue(checking_index);
-        Delta delta = new Delta(delta_id, checking_index, difference);
-//        System.out.println("watek " + id + " ma delte:" + delta);
-        deltas.add(delta);
+        for (int i=checking_index; i<task.getSecondIndex(); i++){
+            int difference = vector2.getValue(i) - vector1.getValue(i);
+            Delta delta = new Delta(delta_id, i, difference);
+            deltas.add(delta);
+        }
 
         deltsCalculation.returnDelta(deltas);
     }
@@ -207,6 +224,10 @@ class Task {
 
     public int getFirstIndex(){
         return startIndex;
+    }
+
+    public int getSecondIndex(){
+        return endIndex;
     }
 
     public Data getFirstVector(){
@@ -354,7 +375,11 @@ class DeltaCollecting {
                 return s2.getIdx() - s1.getIdx();
             });
 
-            deltaReceiver.accept(sublist);
+            if (sublist.size() != 0){
+                deltaReceiver.accept(sublist);
+            }
+
+//            deltaReceiver.accept(sublist);
             computingVectorId++;
             sendDeltsToReceiver();
         }
