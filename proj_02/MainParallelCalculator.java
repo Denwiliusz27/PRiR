@@ -3,11 +3,11 @@ public class MainParallelCalculator {
 
     public void uruchom(){
         parallelCalculator = new ParallelCalculator();
-//        parallelCalculator.setDeltaReceiver(new OdbiorWynikow());
+        parallelCalculator.setDeltaReceiver(new ReceiveOfResults());
         parallelCalculator.setThreadsNumber(4);
 
         int[] t0 = {0, 0, 0, 0, 0, 0};
-        int[] t1 = {1, 0, 0, 0, 0, 0};
+        int[] t1 = {0, 0, 0, 0, 0, 0};
         int[] t2 = {0, 1, 0, 0, 0, 0};
         int[] t3 = {0, 0, 1, 0, 0, 0};
         int[] t4 = {0, 0, 0, 1, 0, 0};
@@ -88,9 +88,9 @@ public class MainParallelCalculator {
 //        }
 
 
-//        int[] tablica = {1, 2, 3, 4, 5, 7};
-//
-//
+        int[] tablica = {1, 2, 3, 4, 5, 7};
+
+
 //        for(int i=100; i>=8; i--){
 //            zestaw_wektor = new DataSet(i, tablica);
 //            parallelCalculator.addData(zestaw_wektor);
