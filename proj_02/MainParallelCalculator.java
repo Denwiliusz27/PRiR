@@ -4,7 +4,7 @@ public class MainParallelCalculator {
     public void uruchom(){
         parallelCalculator = new ParallelCalculator();
         parallelCalculator.setDeltaReceiver(new ReceiveOfResults());
-        parallelCalculator.setThreadsNumber(4);
+        parallelCalculator.setThreadsNumber(1);
 
         int[] t0 = {0, 0, 0, 0, 0, 0};
         int[] t1 = {0, 0, 0, 0, 0, 0};

@@ -69,10 +69,10 @@ public class ParallelCalculator implements DeltaParallelCalculator {
                 for (int j = 0; j < vectorFromList.getSize(); j++) {
                     Task newTask = new Task(vectorFromList, data, j, j);
 
-                    tasksSemaphore.acquireUninterruptibly(); // rozpoczynam ochrone listy taskow
+//                    tasksSemaphore.acquireUninterruptibly(); // rozpoczynam ochrone listy taskow
                     sortTasks(newTask);
 //                    System.out.println("Ilosc tasków: " + tasks.size() + " lista: "+ tasks);
-                    tasksSemaphore.release(); // koncze ochrone listy taskow
+//                    tasksSemaphore.release(); // koncze ochrone listy taskow
                     waitForTasks.release(); // dodaj do semafora 1
                 }
 
@@ -111,25 +111,35 @@ public class ParallelCalculator implements DeltaParallelCalculator {
     }
 
     public void sortTasks(Task task) {
-        if (tasks.size() == 0){
+        synchronized (tasks){
             tasks.add(task);
-        } else {
-            for (int i = 0; i< tasks.size(); i++){
-                if (task.getSmallerId() < tasks.get(i).getSmallerId()){
-                    tasks.add(i, task);
-                    return;
-                }
-            }
-            if (!tasks.contains(task)){
-                tasks.add(task);
-            }
+            tasks.sort((Task task1,Task task2) -> task2.getSmallerId() - task1.getSmallerId());
+//
+//            if (tasks.size() == 0){
+//                tasks.add(task);
+//            } else {
+//                for (int i = 0; i< tasks.size(); i++){
+//                    if (task.getSmallerId() < tasks.get(i).getSmallerId()){
+//                        tasks.add(i, task);
+//                        return;
+//                    }
+//                }
+//                if (!tasks.contains(task)){
+//                    tasks.add(task);
+//                }
+//            }
         }
+
     }
 
-    public synchronized Task getNextTask(){
+    public Task getNextTask(){
 //        System.out.println("Watek " + id+ " stoi przed semaforem");
+        Task taskFromList;
+
         waitForTasks.acquireUninterruptibly(); // stoi w miejscu dla 0 lub wykonuje -1 jesli jest dodatni
-        Task taskFromList = tasks.remove(0);
+        synchronized (tasks){
+            taskFromList = tasks.remove(0);
+        }
 
         return taskFromList;
     }
@@ -318,14 +328,15 @@ class DeltaCollecting {
     }
 
     public synchronized void sendDeltsToReceiver(){
-        if (sortedDelts.size() != vectorSize){
+        if (sortedDelts.size() < vectorSize){
             return;
         }
 
         if (sortedDelts.get(0).getDataID() == computingVectorId){
             for (int i = 0; i< vectorSize; i++){
                 if (sortedDelts.get(i).getDataID() != computingVectorId) {
-                    System.out.println("BŁĄD dla " + sortedDelts.get(i).getDataID());
+//                    System.out.println("BŁĄD dla " + sortedDelts.get(i).getDataID());
+                    return;
                 }
             }
 
