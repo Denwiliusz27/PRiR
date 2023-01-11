@@ -1,45 +1,29 @@
 import java.net.MalformedURLException;
-import java.rmi.AccessException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.RemoteException;
-import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.lang.*;
 
 public class ReservationSystem extends UnicastRemoteObject implements Cinema{
-    private Set<Integer> avaliableSeats;
-    private Map<String, Set<Integer>> reservations;
-
-    private Map<String, Boolean> usersTimeExpiration;
-    
-    private Map<String, Long> timeOfReservation;
+    private Set<Integer> avaliableSeats = new HashSet<>();
+    private Map<String, Set<Integer>> reservations = new HashMap<>();
+    private Map<String, Boolean> usersTimeExpiration = new HashMap<>();
+    private Map<String, Long> timeOfReservation = new HashMap<>();
     private String[] owners;
-    private long timeForConfirmation;
+    private long timeForConfirmation = 0;
 
-    public ReservationSystem() throws RemoteException, MalformedURLException, AlreadyBoundException {
-//        super();
-        this.avaliableSeats = new HashSet<>();
-        this.reservations = new HashMap<>();
-        this.timeForConfirmation = 0;
-        this.timeOfReservation = new HashMap<>();
-        this.usersTimeExpiration = new HashMap<>();
-
-//        Registry registry = java.rmi.registry.LocateRegistry.createRegistry(1099);
-//        registry.rebind( Cinema.SERVICE_NAME,this );
-        java.rmi.Naming.bind(Cinema.SERVICE_NAME, this);
+    public ReservationSystem() throws RemoteException{
+        try{
+            java.rmi.Naming.bind(Cinema.SERVICE_NAME, this);
+        } catch(Exception e){
+            e.printStackTrace();
+        }
     }
 
-    
-    @Override
-    public void configuration(int seats, long timeForConfirmation) throws RemoteException {
-//        if (seats <= 0 || timeForConfirmation <= 0){
-//            return;
-//        }
 
+    @Override
+    public synchronized void configuration(int seats, long timeForConfirmation) throws RemoteException {
         this.timeForConfirmation = timeForConfirmation;
         owners = new String[seats];
 
@@ -69,9 +53,9 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
             }
         }
 
-        usersTimeExpiration.put(user, false);
+//        usersTimeExpiration.put(user, false);
         reservations.put(user, seats);
-        timeOfReservation.put(user, System.currentTimeMillis());
+        timeOfReservation.put(user, new Date().getTime()); //System.currentTimeMillis());
         avaliableSeats.removeAll(seats);
 
         return true;
@@ -81,7 +65,7 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
     public synchronized boolean confirmation(String user) throws RemoteException {
         if (reservations.containsKey(user)) {
             var seats = reservations.remove(user);
-            long now = System.currentTimeMillis() - timeForConfirmation;
+            long now = new Date().getTime() - timeForConfirmation; //System.currentTimeMillis() - timeForConfirmation;
             long v = timeOfReservation.remove(user);
 
             boolean expired = v < now;
@@ -89,26 +73,18 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
             if (expired) {
                 if (avaliableSeats.containsAll(seats)) {
                     avaliableSeats.removeAll(seats);
-//                    reservations.remove(user);
-//                    timeOfReservation.remove(user);
 
                     for (int seat : seats) {
                         owners[seat] = user;
                     }
-
                     return true;
                 } else {
-
                     return false;
                 }
             } else {
-//                reservations.remove(user);
-//                timeOfReservation.remove(user);
-
                 for (int seat : seats) {
                     owners[seat] = user;
                 }
-
                 return true;
             }
         }
@@ -120,26 +96,32 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
         if (seat < 0 || seat >= owners.length ){
             return null;
         }
-
         return owners[seat];
     }
 
     private synchronized void cleanReservations(){
-        long now = System.currentTimeMillis() - timeForConfirmation;
-        Map<String, Long> timesToRemove = new HashMap<>();
+        long now = new Date().getTime();
 
-       for (String key:timeOfReservation.keySet()){
-           if (timeOfReservation.get(key) < now){
-               timesToRemove.put(key, timeOfReservation.get(key));
-               Set<Integer> seats = reservations.get(key);
-               usersTimeExpiration.put(key, true);
+        for (String user:timeOfReservation.keySet()){
+            if ((timeOfReservation.get(user) != (long) 0) && ((now - timeOfReservation.get(user)) > timeForConfirmation)){
+//                if (usersTimeExpiration.get(user)) continue;
+//                usersTimeExpiration.put(user, true);
+//                var seats = reservations.get(user);
+//
+//                for ( String r:reservations.keySet()){
+//                    if (!Objects.equals(r, user)){
+//                       for (int s:seats){
+//                           if ( reservations.get(r).contains(s)){
+//
+//                           }
+//                       }
+//                    }
+//                }
 
-               avaliableSeats.addAll(seats);
+
+                avaliableSeats.addAll(reservations.get(user));
+                timeOfReservation.put(user, (long) 0);
            }
-       }
-
-       for (String time:timesToRemove.keySet()){
-           timeOfReservation.remove(time);
-       }
+        }
     }
 }
