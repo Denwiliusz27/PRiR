@@ -11,7 +11,7 @@ public class Client {
     public static void main(String[] args){
         try {
             Cinema access =
-                    (Cinema) Naming.lookup("rmi://localhost:1900" + "/Cinema");
+                    (Cinema) Naming.lookup("CINEMA");
 
             access.configuration(30, 1000);
             Integer[] seats = new Integer[]{3,4,5};

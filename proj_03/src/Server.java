@@ -4,13 +4,12 @@ import java.rmi.*;
 import java.rmi.registry.*;
 
 public class Server {
-    public static void main(String[] args) throws RemoteException {
+    public static void main(String[] args) throws RemoteException, MalformedURLException, AlreadyBoundException {
+        int PORT = 1099;
+        Registry registry =
+                java.rmi.registry.LocateRegistry.createRegistry(PORT);
+
         Cinema service = new ReservationSystem();
-        LocateRegistry.createRegistry(1900);
-        try {
-            Naming.rebind("rmi://localhost:1900/Cinema", service);
-        } catch (MalformedURLException e) {
-            System.out.println(e.getMessage());
-        }
+        service.configuration(100, 1000);
     }
 }
