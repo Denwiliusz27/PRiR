@@ -1,5 +1,3 @@
-import java.net.MalformedURLException;
-import java.rmi.AlreadyBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
@@ -8,7 +6,6 @@ import java.lang.*;
 public class ReservationSystem extends UnicastRemoteObject implements Cinema{
     private Set<Integer> avaliableSeats = new HashSet<>();
     private Map<String, Set<Integer>> reservations = new HashMap<>();
-    private Map<String, Boolean> usersTimeExpiration = new HashMap<>();
     private Map<String, Long> timeOfReservation = new HashMap<>();
     private String[] owners;
     private long timeForConfirmation = 0;
@@ -53,9 +50,8 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
             }
         }
 
-//        usersTimeExpiration.put(user, false);
         reservations.put(user, seats);
-        timeOfReservation.put(user, new Date().getTime()); //System.currentTimeMillis());
+        timeOfReservation.put(user, System.currentTimeMillis());
         avaliableSeats.removeAll(seats);
 
         return true;
@@ -63,11 +59,12 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
 
     @Override
     public synchronized boolean confirmation(String user) throws RemoteException {
+        cleanReservations();
+
         if (reservations.containsKey(user)) {
             var seats = reservations.remove(user);
-            long now = new Date().getTime() - timeForConfirmation; //System.currentTimeMillis() - timeForConfirmation;
+            long now = System.currentTimeMillis() - timeForConfirmation;
             long v = timeOfReservation.remove(user);
-
             boolean expired = v < now;
 
             if (expired) {
@@ -104,21 +101,6 @@ public class ReservationSystem extends UnicastRemoteObject implements Cinema{
 
         for (String user:timeOfReservation.keySet()){
             if ((timeOfReservation.get(user) != (long) 0) && ((now - timeOfReservation.get(user)) > timeForConfirmation)){
-//                if (usersTimeExpiration.get(user)) continue;
-//                usersTimeExpiration.put(user, true);
-//                var seats = reservations.get(user);
-//
-//                for ( String r:reservations.keySet()){
-//                    if (!Objects.equals(r, user)){
-//                       for (int s:seats){
-//                           if ( reservations.get(r).contains(s)){
-//
-//                           }
-//                       }
-//                    }
-//                }
-
-
                 avaliableSeats.addAll(reservations.get(user));
                 timeOfReservation.put(user, (long) 0);
            }
