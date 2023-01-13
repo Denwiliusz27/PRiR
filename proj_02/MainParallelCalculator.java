@@ -4,18 +4,18 @@ public class MainParallelCalculator {
     public void uruchom(){
         parallelCalculator = new ParallelCalculator();
         parallelCalculator.setDeltaReceiver(new ReceiveOfResults());
-        parallelCalculator.setThreadsNumber(1);
+        parallelCalculator.setThreadsNumber(3);
 
-        int[] t0 = {0, 0, 0, 0, 0, 0};
-        int[] t1 = {0, 0, 0, 0, 0, 0};
-        int[] t2 = {0, 1, 0, 0, 0, 0};
-        int[] t3 = {0, 0, 1, 0, 0, 0};
-        int[] t4 = {0, 0, 0, 1, 0, 0};
-        int[] t5 = {0, 0, 0, 0, 1, 0};
-        int[] t6 = {0, 0, 0, 0, 0, 1};
-        int[] t7 = {1, 1, 0, 0, 0, 0};
-        int[] t8 = {0, 1, 1, 0, 0, 0};
-        int[] t9 = {0, 0, 1, 1, 0, 0};
+        int[] t0 = {0, 0, 0, 0, 0, 0,0,0,0,0};
+        int[] t1 = {0, 0, 0, 0, 0, 0,0,0,0,0};
+        int[] t2 = {0, 1, 0, 0, 0, 0,0,0,0,0};
+        int[] t3 = {0, 0, 1, 0, 0, 0,0,0,0,0};
+        int[] t4 = {0, 0, 0, 1, 0, 0,0,0,0,0};
+        int[] t5 = {0, 0, 0, 0, 1, 0,0,0,0,0};
+        int[] t6 = {0, 0, 0, 0, 0, 1,0,0,0,0};
+        int[] t7 = {1, 1, 0, 0, 0, 0,0,0,0,0};
+        int[] t8 = {0, 1, 1, 0, 0, 0,0,0,0,0};
+        int[] t9 = {0, 0, 1, 1, 0, 0,0,0,0,0};
 
 
         DataSet zestaw_wektor = new DataSet(2, t2);
